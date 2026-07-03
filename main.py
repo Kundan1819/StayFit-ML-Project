@@ -171,38 +171,39 @@ def main():
         
         user_id = st.session_state.get("user_id", 0)
 
-    if isinstance(user_id, int):
-        history_rows = get_users_exercises(user_id)
+        if isinstance(user_id, int):
+            history_rows = get_users_exercises(user_id)
 
-        df_arr = [
-            {
-                "Exercise": row["exercise_name"],
-                "Reps": row["reps"],
-                "Sets": row["sets"],
-                "Time (sec)": row["time"],
-                "Date": row["created_at"]
-            }
-            for row in history_rows
-        ]
-
-        # create dataframe of fetched workout history
-        df = pd.DataFrame(df_arr)
-
-        if not df.empty:
-            df["Date"] = pd.to_datetime(df["Date"]).dt.date     # chage date format
-            agg_df = df.groupby(["Exercise", "Date"]).agg(      # aggregate history for same day , same exercise
+            df_arr = [
                 {
-                    'Reps': 'sum',
-                    "Sets": 'sum',
-                    "Time (sec)": 'sum'
+                    "Exercise": row["exercise_name"],
+                    "Reps": row["reps"],
+                    "Sets": row["sets"],
+                    "Time (sec)": row["time"],
+                    "Date": row["created_at"]
                 }
-            ).reset_index()
-            agg_df.index += 1       # index start from 0 -> +1 
+                for row in history_rows
+            ]
+
+            # create dataframe of fetched workout history
+            df = pd.DataFrame(df_arr)
+
+            if not df.empty:
+                df["Date"] = pd.to_datetime(df["Date"]).dt.date     # chage date format
+                agg_df = df.groupby(["Exercise", "Date"]).agg(      # aggregate history for same day , same exercise
+                    {
+                        'Reps': 'sum',
+                        "Sets": 'sum',
+                        "Time (sec)": 'sum'
+                    }
+                ).reset_index()
+                agg_df.index += 1       # index start from 0 -> +1 
+                
+                st.table(agg_df, border="horizontal")   # displays table from dataframe
+            else:
+                st.info("No workout history found.")
             
-            st.table(agg_df, border="horizontal")   # displays table from dataframe
-        else:
-            st.info("No workout history found.")
-        
+
         
 if __name__ == "__main__":
     main()
