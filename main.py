@@ -11,6 +11,12 @@ from services.vision.exercise_video_processor import VideoProcessorClass
 from services.tracking.metrics import sync_metrics_update
 from services.persistence.exercise_repository import get_users_exercises
 import pandas as pd
+from groq import Groq
+from services.coaching.LLM import LLMCoach
+from services.coaching.TTS import TextToSpeech
+from services.coaching.voice_pipeline import VoicePipeline, autoplay_audio
+from dotenv import load_dotenv
+
 
 # st.title("StayFit : AI Gym Coach")
 # st.write("Welcome to StayFit! Login to start your fitness journey.")
@@ -32,6 +38,28 @@ def main():
         return
     
     initialize_session_defaults()
+    load_dotenv()
+    
+    if "voice_pipeline" not in st.session_state:
+        try:
+            api_key = os.environ.get("GROQ_API_KEY", "")
+
+            if not api_key and hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+                api_key = st.secrets["GROQ_API_KEY"]
+
+            if not api_key:
+                st.session_state.voice_pipeline = None
+            else:
+                groq_client = Groq(api_key=api_key)
+                llm_coach = LLMCoach(groq_client)
+                tts = TextToSpeech()
+                st.session_state.voice_pipeline = VoicePipeline(llm_coach, tts)
+            
+        except Exception as e:
+            st.error("Groq API call failed :(")
+            st.error(f"Error: {type(e).__name__}: {e}")
+            st.session_state.voice_pipeline = None
+
     workout_started = st.session_state.get("workout_started", False)
     
     with st.sidebar:
@@ -56,6 +84,20 @@ def main():
                 st.session_state.last_saved_sets_completed = 0
                 st.session_state.last_modified_sets_completed = 0
                 st.session_state.last_saved_workout_completed = 0
+                
+                
+                if st.session_state.voice_pipeline:
+                    result = st.session_state.voice_pipeline.process_event(
+                        event="workout_started",
+                        exercise=plan_exercise,
+                        metrics={}
+                    )
+                    
+                    if result:
+                        st.session_state.audio_to_play, st.session_state.coach_feedback = result
+
+                st.session_state.last_notified_sets_completed = 0
+                st.session_state.last_notified_workout_complete = False
                 st.rerun()
         else: 
             st.write("Workout started! Keep going!")
@@ -70,7 +112,14 @@ def main():
             
             if end_workout_button:
                 st.session_state["workout_started"] = False
-                # st.success("Workout session ended!")
+                if st.session_state.voice_pipeline:
+                    result = st.session_state.voice_pipeline.process_event(
+                        event="workout_completed",
+                        exercise=exercise,
+                        metrics={}
+                    )
+                    if result:
+                        st.session_state.audio_to_play, st.session_state.coach_feedback = result
                 st.rerun()
         
         if workout_started:
@@ -96,7 +145,7 @@ def main():
                 st.metric("Depth Status", st.session_state.depth_status)
 
             elif exercise == "Push-ups":
-                st.subheader("Push-up Metrics")
+                st.subheader("Push-ups Metrics")
                 st.metric("Elbow Angle", f"{st.session_state.elbow_angle}°")
                 st.metric("Body Alignment", st.session_state.body_alignment)
                 st.metric("Hip Position", st.session_state.hip_status)
@@ -123,6 +172,15 @@ def main():
     # Video Feature
     st.title("StayFit - Your AI Gym Coach")
     st.markdown("Powered by AI, Driven by You 😉")
+    
+    # Audio Feedback
+    if st.session_state.get("audio_to_play"):
+        autoplay_audio(st.session_state.audio_to_play)
+
+    # Text Feedback
+    if st.session_state.get("coach_feedback"):
+        st.markdown("")
+        st.success(f"🤖 ** AI Coach:** {st.session_state.coach_feedback}")
 
     if not workout_started:
         st.markdown(

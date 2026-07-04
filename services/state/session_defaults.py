@@ -7,7 +7,7 @@ def initialize_session_defaults():
         "reps_per_set": 0,
         "sets_completed": 0,
         "current_set_reps": 0,
-        "workout_complete": False,
+        "workout_completed": False,
         "last_notified_sets_completed": 0,
         "last_notified_workout_complete": False,
         "last_saved_sets_completed": 0,
